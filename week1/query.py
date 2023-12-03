@@ -1,6 +1,7 @@
 # A simple client for querying driven by user input on the command line.  Has hooks for the various
 # weeks (e.g. query understanding).  See the main section at the bottom of the file
 from opensearchpy import OpenSearch
+from opensearchpy.exceptions import RequestError
 import warnings
 warnings.filterwarnings("ignore", category=FutureWarning)
 import argparse
@@ -58,7 +59,7 @@ def create_query(user_query, filters=None, sort="_score", sortDir="desc", size=1
                                 "match": {
                                     "name": {
                                         "query": user_query,
-                                        "fuzziness": "1",
+                                        # "fuzziness": "1",
                                         "prefix_length": 2,
                                         # short words are often acronyms or usually not misspelled, so don't edit
                                         "boost": 0.01
@@ -80,9 +81,7 @@ def create_query(user_query, filters=None, sort="_score", sortDir="desc", size=1
                                     "type": "phrase",
                                     "slop": "6",
                                     "minimum_should_match": "2<75%",
-                                    "fields": ["name^10", "name.hyphens^10", "shortDescription^5",
-                                               "longDescription^5", "department^0.5", "sku", "manufacturer", "features",
-                                               "categoryPath"]
+                                    "fields": ["name^10", "shortDescription^5"]
                                 }
                             },
                             {
@@ -106,54 +105,54 @@ def create_query(user_query, filters=None, sort="_score", sortDir="desc", size=1
                         "filter": filters  #
                     }
                 },
-                "boost_mode": "multiply",  # how _score and functions are combined
-                "score_mode": "sum",  # how functions are combined
-                "functions": [
-                    {
-                        "filter": {
-                            "exists": {
-                                "field": "salesRankShortTerm"
-                            }
-                        },
-                        "gauss": {
-                            "salesRankShortTerm": {
-                                "origin": "1.0",
-                                "scale": "100"
-                            }
-                        }
-                    },
-                    {
-                        "filter": {
-                            "exists": {
-                                "field": "salesRankMediumTerm"
-                            }
-                        },
-                        "gauss": {
-                            "salesRankMediumTerm": {
-                                "origin": "1.0",
-                                "scale": "1000"
-                            }
-                        }
-                    },
-                    {
-                        "filter": {
-                            "exists": {
-                                "field": "salesRankLongTerm"
-                            }
-                        },
-                        "gauss": {
-                            "salesRankLongTerm": {
-                                "origin": "1.0",
-                                "scale": "1000"
-                            }
-                        }
-                    },
-                    {
-                        "script_score": {
-                            "script": "0.0001"
-                        }
-                    }
-                ]
+                # "boost_mode": "multiply",  # how _score and functions are combined
+                # "score_mode": "sum",  # how functions are combined
+                # "functions": [
+                #     {
+                #         "filter": {
+                #             "exists": {
+                #                 "field": "salesRankShortTerm"
+                #             }
+                #         },
+                #         "gauss": {
+                #             "salesRankShortTerm": {
+                #                 "origin": "1.0",
+                #                 "scale": "100"
+                #             }
+                #         }
+                #     },
+                #     {
+                #         "filter": {
+                #             "exists": {
+                #                 "field": "salesRankMediumTerm"
+                #             }
+                #         },
+                #         "gauss": {
+                #             "salesRankMediumTerm": {
+                #                 "origin": "1.0",
+                #                 "scale": "1000"
+                #             }
+                #         }
+                #     },
+                #     {
+                #         "filter": {
+                #             "exists": {
+                #                 "field": "salesRankLongTerm"
+                #             }
+                #         },
+                #         "gauss": {
+                #             "salesRankLongTerm": {
+                #                 "origin": "1.0",
+                #                 "scale": "1000"
+                #             }
+                #         }
+                #     },
+                #     {
+                #         "script_score": {
+                #             "script": "0.0001"
+                #         }
+                #     }
+                # ]
 
             }
         }
@@ -198,7 +197,11 @@ def main(query_file: str, index_name: str, host: str, max_queries: int):
     logger.info(f"Running queries, checking in every {modulo} queries:")
     for query in queries:
         i+= 1
-        hits = search(client, query, index_name)
+        try:
+            hits = search(client, query, index_name)
+        except RequestError:
+            logger.info(f'Error processing query {query}')
+
         if i % modulo == 0 and hits is not None:
             logger.info(f"Query: {query} has {len(hits)} hits.")
 
